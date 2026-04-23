@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="{{ settings.ui.theme_mode | default('matrix-green') }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ALDEA{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Exo+2:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="ambient-layer"></div>
+    <header class="top-nav">
+        <div class="brand-wrap">
+            <div class="brand-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M4 8.5l2.2-4.1L9 7.2A9 9 0 0 1 12 6.7a9 9 0 0 1 3 .5l2.8-2.8L20 8.5A8 8 0 0 1 20 15a8 8 0 0 1-16 0 8 8 0 0 1 0-6.5z"></path>
+                    <circle cx="9.3" cy="13" r="1"></circle>
+                    <circle cx="14.7" cy="13" r="1"></circle>
+                    <path d="M9.5 16.4c.8.7 1.6 1 2.5 1s1.7-.3 2.5-1"></path>
+                </svg>
+            </div>
+            <div>
+                <h1 class="brand-title">ALDEA</h1>
+                <p class="brand-subtitle">Adaptive Learning Digital Empathy Assistant</p>
+            </div>
+        </div>
+        <nav class="nav-actions">
+            <a href="{{ url_for('index') }}" class="nav-link">Chat</a>
+            <a href="{{ url_for('settings_page') }}" class="nav-link">Configuration</a>
+            <a href="{{ url_for('about_page') }}" class="nav-link">About</a>
+        </nav>
+    </header>
+
+    <main class="page-shell">
+        {% block content %}{% endblock %}
+    </main>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.10.0/lib/highlight.min.js"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

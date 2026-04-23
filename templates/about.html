@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}About | ALDEA{% endblock %}
+
+{% block content %}
+<section class="about-shell glass-panel">
+    <header>
+        <h2>About This Chatbot</h2>
+        <p class="about-sub">A premium local-first AI chat workstation built with Flask.</p>
+    </header>
+
+    <div class="about-grid">
+        <article>
+            <h3>What It Is</h3>
+            <p>
+                ALDEA is designed to feel like a modern operations console: calm, focused,
+                and highly configurable. It supports OpenAI-compatible endpoints and Ollama native chat,
+                so you can point it at local or remote models.
+            </p>
+        </article>
+        <article>
+            <h3>Voice Pipeline</h3>
+            <p>
+                Optional integrations let you add speech both ways: Whisper.cpp for transcription and
+                Coqui-TTS for synthesized output. Keep everything local when privacy and control matter.
+            </p>
+        </article>
+        <article>
+            <h3>Persistence</h3>
+            <p>
+                Conversations can be saved and restored from a chat archive. Settings are stored separately,
+                allowing rapid iteration on prompts, models, and server endpoints.
+            </p>
+        </article>
+        <article>
+            <h3>Design Language</h3>
+            <p>
+                The interface uses a green-black-silver metallic style with adaptive light and dark modes,
+                responsive layouts, and intentionally sharp visual hierarchy for desktop and mobile.
+            </p>
+        </article>
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+{% block title %}Configuration | ALDEA{% endblock %}
+
+{% block content %}
+<section class="settings-shell glass-panel">
+    <header class="settings-head">
+        <h2>Configuration Console</h2>
+        <p>Tune model behavior, voice integrations, and visual identity.</p>
+    </header>
+
+    <form method="post" enctype="multipart/form-data" class="settings-form">
+        <details class="settings-card settings-collapsible">
+            <summary>
+                <span class="settings-summary-title">Visual + Avatars</span>
+                <span class="settings-summary-icon" aria-hidden="true"></span>
+            </summary>
+            <div class="settings-collapsible-content">
+                <label>Color Scheme
+                    <select name="theme_mode">
+                        <option value="matrix-green" {% if settings.ui.theme_mode == 'matrix-green' %}selected{% endif %}>Matrix Green (Default)</option>
+                        <option value="blue-onyx" {% if settings.ui.theme_mode == 'blue-onyx' %}selected{% endif %}>Blue Onyx</option>
+                        <option value="crimson-steel" {% if settings.ui.theme_mode == 'crimson-steel' %}selected{% endif %}>Crimson Steel</option>
+                        <option value="midnight-violet" {% if settings.ui.theme_mode == 'midnight-violet' %}selected{% endif %}>Midnight Violet</option>
+                        <option value="cyber-neon" {% if settings.ui.theme_mode == 'cyber-neon' %}selected{% endif %}>Cyber Neon</option>
+                        <option value="acid-neon" {% if settings.ui.theme_mode == 'acid-neon' %}selected{% endif %}>Acid Neon</option>
+                        <option value="arctic-mint" {% if settings.ui.theme_mode == 'arctic-mint' %}selected{% endif %}>Arctic Mint</option>
+                        <option value="peach-fuzz" {% if settings.ui.theme_mode == 'peach-fuzz' %}selected{% endif %}>Peach Fuzz</option>
+                        <option value="lavender-dream" {% if settings.ui.theme_mode == 'lavender-dream' %}selected{% endif %}>Lavender Dream</option>
+                        <option value="lemonade-pop" {% if settings.ui.theme_mode == 'lemonade-pop' %}selected{% endif %}>Lemonade Pop</option>
+                    </select>
+                </label>
+                <div class="theme-preview-wrap" aria-label="Theme previews">
+                    <p class="theme-preview-title">Theme Preview Swatches</p>
+                    <div class="theme-preview-grid" id="themePreviewGrid">
+                        <button type="button" class="theme-swatch {% if settings.ui.theme_mode == 'matrix-green' %}is-selected{% endif %}" data-theme-value="matrix-green" aria-label="Select Matrix Green theme">
+                            <span class="theme-swatch-chips">
+                                <span style="background:#07110d"></span><span style="background:#46c97a"></span><span style="background:#202a27"></span>
+                            </span>
+                            <span class="theme-swatch-name">Matrix Green</span>
+                        </button>
+                        <button type="button" class="theme-swatch {% if settings.ui.theme_mode == 'blue-onyx' %}is-selected{% endif %}" data-theme-value="blue-onyx" aria-label="Select Blue Onyx theme">
+                            <span class="theme-swatch-chips">
+                                <span style="background:#08111b"></span><span style="background:#49a8ff"></span><span style="background:#1b2b38"></span>
+                            </span>
+                            <span class="theme-swatch-name">Blue Onyx</span>
+                        </button>
+                        <button type="button" class="theme-swatch {% if settings.ui.theme_mode == 'crimson-steel' %}is-selected{% endif %}" data-theme-value="crimson-steel" aria-label="Select Crimson Steel theme">
+                            <span class="theme-swatch-chips">
+                                <span style="background:#140707"></span><span style="background:#e55f63"></span><span style="background:#352223"></span>
+                            </span>
+                            <span class="theme-swatch-name">Crimson Steel</span>
+                        </button>
+                        <button type="button" class="theme-swatch {% if settings.ui.theme_mode == 'midnight-violet' %}is-selected{% endif %}" data-theme-value="midnight-violet" aria-label="Select Midnight Violet theme">
+                            <span class="theme-swatch-chips">
+                                <span style="background:#0e091a"></span><span style="background:#9a74ff"></span><span style="background:#2b2538"></span>
+                            </span>
+                            <span class="theme-swatch-name">Midnight Violet</span>
+                        </button>
+                        <button type="button" class="theme-swatch {% if settings.ui.theme_mode == 'cyber-neon' %}is-selected{% endif %}" data-theme-value="cyber-neon" aria-label="Select Cyber Neon theme">
+                            <span class="theme-swatch-chips">
+                                <span style="background:#050505"></span><span style="background:#00f7ff"></span><span style="background:#1b1b1b"></span>
+                            </span>
+                            <span class="theme-swatch-name">Cyber Neon</span>
+                        </button>
+                        <button type="button" class="theme-swatch {% if settings.ui.theme_mode == 'acid-neon' %}is-selected{% endif %}" data-theme-value="acid-neon" aria-label="Select Acid Neon theme">
+                            <span class="theme-swatch-chips">
+                                <span style="background:#0a0a00"></span><span style="background:#d4ff00"></span><span style="background:#272a18"></span>
+                            </span>
+                            <span class="theme-swatch-name">Acid Neon</span>
+                        </button>
+                        <button type="button" class="theme-swatch {% if settings.ui.theme_mode == 'arctic-mint' %}is-selected{% endif %}" data-theme-value="arctic-mint" aria-label="Select Arctic Mint theme">
+                            <span class="theme-swatch-chips">
+                                <span style="background:#eef5f1"></span><span style="background:#1a9d5a"></span><span style="background:#edf3f0"></span>
+                            </span>
+                            <span class="theme-swatch-name">Arctic Mint</span>
+                        </button>
+                        <button type="button" class="theme-swatch {% if settings.ui.theme_mode == 'peach-fuzz' %}is-selected{% endif %}" data-theme-value="peach-fuzz" aria-label="Select Peach Fuzz theme">
+                            <span class="theme-swatch-chips">
+                                <span style="background:#fff0ea"></span><span style="background:#f08a6f"></span><span style="background:#f8efeb"></span>
+                            </span>
+                            <span class="theme-swatch-name">Peach Fuzz</span>
+                        </button>
+                        <button type="button" class="theme-swatch {% if settings.ui.theme_mode == 'lavender-dream' %}is-selected{% endif %}" data-theme-value="lavender-dream" aria-label="Select Lavender Dream theme">
+                            <span class="theme-swatch-chips">
+                                <span style="background:#f3efff"></span><span style="background:#8f7cff"></span><span style="background:#f1eef8"></span>
+                            </span>
+                            <span class="theme-swatch-name">Lavender Dream</span>
+                        </button>
+                        <button type="button" class="theme-swatch {% if settings.ui.theme_mode == 'lemonade-pop' %}is-selected{% endif %}" data-theme-value="lemonade-pop" aria-label="Select Lemonade Pop theme">
+                            <span class="theme-swatch-chips">
+                                <span style="background:#fffce6"></span><span style="background:#ff8a00"></span><span style="background:#fbf8e7"></span>
+                            </span>
+                            <span class="theme-swatch-name">Lemonade Pop</span>
+                        </button>
+                    </div>
+                </div>
+                <label>Assistant Avatar URL
+                    <input name="assistant_avatar" type="text" value="{{ settings.ui.assistant_avatar }}" placeholder="https://... or /static/uploads/...">
+                </label>
+                <label>Assistant Avatar Upload (optional)
+                    <input name="assistant_avatar_file" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.svg,image/*">
+                </label>
+                <label class="checkbox-row">
+                    <input name="remove_assistant_avatar" type="checkbox">
+                    Remove custom assistant avatar and use URL/default
+                </label>
+                <label>User Avatar URL
+                    <input name="user_avatar" type="text" value="{{ settings.ui.user_avatar }}" placeholder="https://... or /static/uploads/...">
+                </label>
+                <label>User Avatar Upload (optional)
+                    <input name="user_avatar_file" type="file" accept=".png,.jpg,.jpeg,.gif,.webp,.svg,image/*">
+                </label>
+                <label class="checkbox-row">
+                    <input name="remove_user_avatar" type="checkbox">
+                    Remove custom user avatar and use URL/default
+                </label>
+                <p class="field-help">You can provide a URL or upload an image file. If both are provided, the uploaded file is used.</p>
+            </div>
+        </details>
+
+        <details class="settings-card settings-collapsible">
+            <summary>
+                <span class="settings-summary-title">LLM Provider</span>
+                <span class="settings-summary-icon" aria-hidden="true"></span>
+            </summary>
+            <div class="settings-collapsible-content">
+            <label>Provider
+                <select name="provider">
+                    <option value="openai_compatible" {% if settings.llm.provider == 'openai_compatible' %}selected{% endif %}>OpenAI-Compatible</option>
+                    <option value="ollama" {% if settings.llm.provider == 'ollama' %}selected{% endif %}>Ollama Native</option>
+                </select>
+            </label>
+            <label>Server URL
+                <input name="llm_server_url" type="url" value="{{ settings.llm.server_url }}" required>
+            </label>
+            <label>API Key (OpenAI-Compatible)
+                <input name="api_key" type="password" value="{{ settings.llm.api_key }}" placeholder="Optional for Ollama">
+            </label>
+            <label>Model
+                <input name="model" type="text" value="{{ settings.llm.model }}" required>
+            </label>
+            <label>Context Window
+                <input name="context_window" type="number" min="1024" max="524288" step="256" value="{{ settings.llm.context_window }}">
+            </label>
+            <label>Temperature
+                <input name="temperature" type="number" min="0" max="2" step="0.05" value="{{ settings.llm.temperature }}">
+            </label>
+            <label>System Prompt
+                <textarea name="system_prompt" rows="8" required>{{ settings.llm.system_prompt }}</textarea>
+            </label>
+            </div>
+        </details>
+
+        <details class="settings-card settings-collapsible">
+            <summary>
+                <span class="settings-summary-title">Coqui-TTS</span>
+                <span class="settings-summary-icon" aria-hidden="true"></span>
+            </summary>
+            <div class="settings-collapsible-content">
+            <label class="checkbox-row">
+                <input name="tts_enabled" type="checkbox" {% if settings.tts.enabled %}checked{% endif %}>
+                Enable Text to Speech
+            </label>
+            <label class="checkbox-row">
+                <input name="tts_auto_speak_default" type="checkbox" {% if settings.tts.auto_speak_default %}checked{% endif %}>
+                Default State: Speak Replies Toggle On
+            </label>
+            <label>Server URL
+                <input name="tts_server_url" type="url" value="{{ settings.tts.server_url }}">
+            </label>
+            <label>Endpoint
+                <input name="tts_endpoint" type="text" value="{{ settings.tts.endpoint }}">
+            </label>
+            <label>Model (optional, ignored by Coqui runtime)
+                <input name="tts_model" type="text" value="{{ settings.tts.model }}" placeholder="coqui-tts">
+            </label>
+            <label>Voice
+                <input name="tts_voice" type="text" value="{{ settings.tts.voice or settings.tts.speaker }}" placeholder="Speaker ID or reference path">
+            </label>
+            <label>Speed
+                <input name="tts_speed" type="number" min="0.25" max="4" step="0.05" value="{{ settings.tts.speed }}">
+            </label>
+            <label>Response Format
+                <select name="tts_response_format">
+                    <option value="wav" {% if settings.tts.response_format == 'wav' %}selected{% endif %}>wav</option>
+                    <option value="mp3" {% if settings.tts.response_format == 'mp3' %}selected{% endif %}>mp3</option>
+                    <option value="opus" {% if settings.tts.response_format == 'opus' %}selected{% endif %}>opus</option>
+                    <option value="aac" {% if settings.tts.response_format == 'aac' %}selected{% endif %}>aac</option>
+                    <option value="flac" {% if settings.tts.response_format == 'flac' %}selected{% endif %}>flac</option>
+                    <option value="pcm" {% if settings.tts.response_format == 'pcm' %}selected{% endif %}>pcm</option>
+                </select>
+            </label>
+            </div>
+        </details>
+
+        <details class="settings-card settings-collapsible">
+            <summary>
+                <span class="settings-summary-title">Whisper.cpp Speech Input</span>
+                <span class="settings-summary-icon" aria-hidden="true"></span>
+            </summary>
+            <div class="settings-collapsible-content">
+            <label class="checkbox-row">
+                <input name="stt_enabled" type="checkbox" {% if settings.stt.enabled %}checked{% endif %}>
+                Enable Speech Input
+            </label>
+            <label class="checkbox-row">
+                <input name="stt_transcribe_speech_default" type="checkbox" {% if settings.stt.transcribe_speech_default %}checked{% endif %}>
+                Default State: Transcribe Speech Toggle On
+            </label>
+            <label class="checkbox-row">
+                <input name="stt_wake_word_activation" type="checkbox" {% if settings.stt.wake_word_activation %}checked{% endif %}>
+                Wake word activation ("Computer")
+            </label>
+            <label class="checkbox-row">
+                <input name="stt_auto_send_on_silence_detected" type="checkbox" {% if settings.stt.auto_send_on_silence_detected %}checked{% endif %}>
+                Auto Send on silence detected
+            </label>
+            <label>Server URL
+                <input name="stt_server_url" type="url" value="{{ settings.stt.server_url }}">
+            </label>
+            <label>Endpoint
+                <input name="stt_endpoint" type="text" value="{{ settings.stt.endpoint }}">
+            </label>
+            <label>Temperature
+                <input name="stt_temperature" type="number" min="0" max="1" step="0.05" value="{{ settings.stt.temperature }}">
+            </label>
+            <label>Voice Activity Threshold
+                <input name="stt_vad_threshold" type="number" min="0.001" max="0.2" step="0.001" value="{{ settings.stt.vad_threshold }}">
+            </label>
+            <label>Silence Timeout (ms)
+                <input name="stt_silence_timeout_ms" type="number" min="200" max="5000" step="50" value="{{ settings.stt.silence_timeout_ms }}">
+            </label>
+            <label>Auto Send Silence Delay (ms)
+                <input name="stt_auto_send_silence_ms" type="number" min="200" max="5000" step="50" value="{{ settings.stt.auto_send_silence_ms }}">
+            </label>
+            <p class="field-help">Auto Send is applied only while Transcribe Speech is active, and only when wake word activation is enabled.</p>
+            </div>
+        </details>
+
+        <details class="settings-card settings-collapsible">
+            <summary>
+                <span class="settings-summary-title">Random Chats</span>
+                <span class="settings-summary-icon" aria-hidden="true"></span>
+            </summary>
+            <div class="settings-collapsible-content">
+                <label class="checkbox-row">
+                    <input name="random_chats_enabled" type="checkbox" {% if settings.random_chats.enabled %}checked{% endif %}>
+                    Enable Random Chats
+                </label>
+                <label>Idle Time Before Prompt (seconds)
+                    <input name="random_chats_idle_seconds" type="number" min="30" max="3600" step="10" value="{{ settings.random_chats.idle_seconds }}">
+                </label>
+                <p class="field-help">When enabled, ALDEA sends a brief proactive thought after you have been idle for the configured time.</p>
+            </div>
+        </details>
+
+        <details class="settings-card settings-collapsible">
+            <summary>
+                <span class="settings-summary-title">Tools</span>
+                <span class="settings-summary-icon" aria-hidden="true"></span>
+            </summary>
+            <div class="settings-collapsible-content">
+                <label>OpenWeatherMap API Key
+                    <input name="tools_openweathermap_api_key" type="password" value="{{ settings.tools.openweathermap_api_key }}" placeholder="For get_current_weather">
+                </label>
+                <label>Govee API Key
+                    <input name="tools_govee_api_key" type="password" value="{{ settings.tools.govee_api_key }}" placeholder="For control_govee_device">
+                </label>
+                <label>Hue Bridge IP (optional override)
+                    <input name="tools_hue_bridge_ip" type="text" value="{{ settings.tools.hue_bridge_ip }}" placeholder="e.g. 192.168.1.10">
+                </label>
+                <label>Vector Serial (optional)
+                    <input name="tools_vector_serial" type="text" value="{{ settings.tools.vector_serial }}" placeholder="For vector_says">
+                </label>
+                <label>Navidrome Server URL
+                    <input name="tools_navidrome_server_url" type="url" value="{{ settings.tools.navidrome_server_url }}" placeholder="e.g. http://localhost:4533">
+                </label>
+                <label>Navidrome Username
+                    <input name="tools_navidrome_username" type="text" value="{{ settings.tools.navidrome_username }}" placeholder="For play_song_from_navidrome">
+                </label>
+                <label>Navidrome Password
+                    <input name="tools_navidrome_password" type="password" value="{{ settings.tools.navidrome_password }}" placeholder="For play_song_from_navidrome">
+                </label>
+                <label>Navidrome Subsonic Version
+                    <input name="tools_navidrome_subsonic_version" type="text" value="{{ settings.tools.navidrome_subsonic_version }}" placeholder="1.16.1">
+                </label>
+                <label>Navidrome MP3 Cache Directory
+                    <input name="tools_navidrome_mp3_cache_dir" type="text" value="{{ settings.tools.navidrome_mp3_cache_dir }}" placeholder="mp3_cache">
+                </label>
+            </div>
+        </details>
+
+        <div class="settings-actions">
+            <button type="submit" class="btn btn-green">Save Configuration</button>
+        </div>
+    </form>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const themeSelect = document.querySelector('select[name="theme_mode"]');
+        const swatches = document.querySelectorAll(".theme-swatch");
+        if (!themeSelect || !swatches.length) return;
+
+        const updateSelectedSwatch = () => {
+            const selected = themeSelect.value;
+            swatches.forEach((swatch) => {
+                swatch.classList.toggle("is-selected", swatch.dataset.themeValue === selected);
+            });
+        };
+
+        swatches.forEach((swatch) => {
+            swatch.addEventListener("click", () => {
+                themeSelect.value = swatch.dataset.themeValue;
+                updateSelectedSwatch();
+            });
+        });
+
+        themeSelect.addEventListener("change", updateSelectedSwatch);
+        updateSelectedSwatch();
+    });
+</script>
+{% endblock %}

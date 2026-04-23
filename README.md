@@ -1,5 +1,44 @@
 # ALDEA (Flask)
 
+<p align="left">
+  <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-22c55e?style=for-the-badge">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/Python-3.10%2B-3b82f6?style=for-the-badge">
+  <img alt="Flask" src="https://img.shields.io/badge/Backend-Flask-111827?style=for-the-badge">
+  <img alt="Waitress" src="https://img.shields.io/badge/WSGI-Waitress-0f766e?style=for-the-badge">
+  <img alt="SQLite" src="https://img.shields.io/badge/Storage-SQLite-334155?style=for-the-badge">
+</p>
+
+ALDEA is your local-first conversational companion with voice, tools, and a polished multi-theme interface.
+
+## At A Glance
+
+| Capability | What You Get |
+| --- | --- |
+| Chat Core | OpenAI-compatible and Ollama-native backends |
+| Voice Loop | Coqui-TTS output + Whisper.cpp input with wake word support |
+| Productivity | Save/restore chats with auto-generated titles |
+| Personalization | Theme presets, avatar URLs, and avatar uploads |
+| Runtime Control | Full web settings page + SQLite persistence |
+
+## Architecture Snapshot
+
+```mermaid
+flowchart LR
+    U[Browser UI\nchat plus settings] --> F[ALDEA Flask App]
+    F --> DB[(SQLite\nchats and messages)]
+    F --> LLM[LLM Provider\nOpenAI-compatible or Ollama]
+    F --> TTS[Coqui-TTS Server]
+    F --> STT[Whisper.cpp Server]
+    F --> TOOLS[Tool Integrations\nWeather lights music etc]
+```
+
+## Why ALDEA Feels Different
+
+- Designed for long-running local sessions with practical defaults.
+- Built for interruption-friendly voice interactions (speak, stop, resume).
+- Crafted for experimentation with model/tool settings without code edits.
+- Tuned for readability with markdown rendering and syntax-highlighted code blocks.
+
 ALDEA is a polished Python Flask web app that provides a professional chat interface for large language models, with optional voice input/output and configurable visual identity.
 
 The design language includes a default green/black metallic style plus multiple alternate color schemes (pastel, neon, and dark variants). The layout is responsive for desktop and mobile.

@@ -10,6 +10,10 @@
 
 ALDEA is your local-first conversational companion with voice, tools, and a polished multi-theme interface.
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=jeddhor/AldeaChatbot&type=Date)](https://star-history.com/#jeddhor/AldeaChatbot&Date)
+
 ## At A Glance
 
 | Capability | What You Get |

@@ -245,4 +245,6 @@ They are recreated automatically on next launch.
 
 ## License
 
-Use, modify, and adapt freely for personal or internal projects.
+This project is distributed under the MIT License.
+
+See [LICENSE](LICENSE) for the full license text.

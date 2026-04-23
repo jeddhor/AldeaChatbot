@@ -154,6 +154,8 @@ def get_db() -> sqlite3.Connection:
 
 def init_storage() -> None:
     """Create instance folder, settings file, and database tables if needed."""
+    # Make sure writable folders/files exist before the app handles any request.
+    # This lets a first-time user run the app without manual setup steps.
     INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
     AVATAR_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -1093,11 +1095,15 @@ def about_page():
 
 @app.before_request
 def _request_started() -> None:
+    # Start a simple stopwatch so we can log request duration later.
     g._request_started_at = perf_counter()
 
 
 @app.after_request
 def _request_finished(response):
+    # Log one line per HTTP request with method/path/status/time.
+    # This is useful for support and debugging because you can quickly
+    # see what the browser called and how long it took.
     started = getattr(g, "_request_started_at", None)
     duration_ms = ((perf_counter() - started) * 1000.0) if started is not None else -1.0
     path = request.full_path.rstrip("?") if request.full_path else request.path
@@ -1115,6 +1121,8 @@ def api_get_settings():
 
 @app.route("/api/chat", methods=["POST"])
 def api_chat():
+    # Read JSON from the browser. "force/silent" keeps parsing resilient
+    # so the API returns a controlled error instead of crashing.
     payload = request.get_json(force=True, silent=True) or {}
     user_message = (payload.get("message") or "").strip()
     history = payload.get("history") or []
@@ -1122,6 +1130,8 @@ def api_chat():
     if not user_message:
         return jsonify({"error": "Message cannot be empty."}), 400
 
+    # Only keep safe role/content pairs from history.
+    # This prevents unexpected keys/types from leaking into model prompts.
     safe_history = []
     for item in history:
         role = item.get("role", "")
@@ -1130,6 +1140,8 @@ def api_chat():
             safe_history.append({"role": role, "content": content})
 
     try:
+        # Generate one assistant reply using current runtime settings.
+        # include_debug=True also returns tool usage details for UI indicators.
         settings = load_settings()
         response_payload = generate_assistant_reply(settings, user_message, safe_history, include_debug=True)
         if isinstance(response_payload, dict) and "reply" in response_payload:
@@ -1169,6 +1181,8 @@ def api_random_chat():
 
 @app.route("/api/tts", methods=["POST"])
 def api_tts_proxy():
+    # This route is a backend proxy: browser -> ALDEA -> Coqui server.
+    # Keeping this server-side avoids exposing cross-origin/network details in the UI.
     settings = load_settings()
     tts = settings["tts"]
 
@@ -1191,6 +1205,8 @@ def api_tts_proxy():
     }
 
     try:
+        # Forward request to Coqui, then stream back either JSON metadata
+        # or raw audio bytes depending on upstream response type.
         upstream = requests.post(url, json=upstream_payload, timeout=120)
         upstream.raise_for_status()
 
@@ -1223,6 +1239,8 @@ def api_stop_audio():
 
 @app.route("/api/stt", methods=["POST"])
 def api_stt_proxy():
+    # This route proxies uploaded microphone audio to Whisper.cpp and returns
+    # a normalized {text: ...} shape so the frontend has one stable format.
     settings = load_settings()
     stt = settings["stt"]
 
@@ -1239,6 +1257,8 @@ def api_stt_proxy():
     url = f"{stt['server_url'].rstrip('/')}{stt['endpoint']}"
 
     try:
+        # Whisper servers vary by version, so we accept multiple response shapes
+        # (plain text, JSON text/transcript/result, or segmented transcripts).
         files = {
             "file": (audio_file.filename, audio_file.stream, audio_file.mimetype or "application/octet-stream")
         }
@@ -1263,6 +1283,7 @@ def api_stt_proxy():
 @app.route("/api/chats", methods=["GET", "POST"])
 def api_chats():
     if request.method == "GET":
+        # Return saved chat headers for the sidebar list.
         with get_db() as conn:
             rows = conn.execute(
                 "SELECT id, title, created_at, updated_at FROM chats ORDER BY updated_at DESC"
@@ -1286,6 +1307,7 @@ def api_chats():
 
     now = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     with get_db() as conn:
+        # Create chat row first, then insert each message tied to that chat id.
         cursor = conn.execute(
             "INSERT INTO chats(title, created_at, updated_at) VALUES (?, ?, ?)",
             (title, now, now),
@@ -1307,12 +1329,14 @@ def api_chats():
 @app.route("/api/chats/<int:chat_id>", methods=["GET", "DELETE"])
 def api_chat_detail(chat_id: int):
     if request.method == "DELETE":
+        # Remove both message rows and the chat header row.
         with get_db() as conn:
             conn.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
             conn.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
         return jsonify({"status": "deleted"})
 
     with get_db() as conn:
+        # Load one full conversation in message order so the UI can replay it.
         chat = conn.execute(
             "SELECT id, title, created_at, updated_at FROM chats WHERE id = ?",
             (chat_id,),

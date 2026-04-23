@@ -571,6 +571,8 @@ async function speakTextChunked(text) {
 }
 
 async function fetchSettings() {
+    // Pull current runtime settings once so the page can render with
+    // the same configuration the backend is using.
     const response = await fetch("/api/settings");
     if (!response.ok) throw new Error("Unable to load settings");
     cachedSettings = await response.json();
@@ -578,6 +580,8 @@ async function fetchSettings() {
 }
 
 function formatMessageTimestamp(timestampValue) {
+    // Build both a compact timestamp for the bubble and a full version
+    // for the hover tooltip.
     const parsed = timestampValue ? new Date(timestampValue) : new Date();
     const value = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 
@@ -608,6 +612,8 @@ function formatMessageTimestamp(timestampValue) {
 }
 
 function appendMessage(role, content, timestampValue = null) {
+    // Render one chat row (avatar + bubble + timestamp).
+    // This function is used for both restored history and live messages.
     const container = qs("chatMessages");
     if (!container) return;
 
@@ -628,6 +634,8 @@ function appendMessage(role, content, timestampValue = null) {
     bubble.className = "msg-bubble";
 
     if (role === "assistant") {
+        // Assistant messages are rendered as markdown and get extra controls
+        // like the inline "speak" button.
         bubble.classList.add("markdown-body");
         bubble.innerHTML = renderAssistantMarkdown(content);
         enhanceMarkdownCodeBlocks(bubble);
@@ -685,6 +693,7 @@ function appendMessage(role, content, timestampValue = null) {
 }
 
 function renderHistory(messages) {
+    // Rebuild the message list from scratch when a saved conversation is opened.
     const container = qs("chatMessages");
     if (!container) return;
     container.innerHTML = "";
@@ -692,6 +701,7 @@ function renderHistory(messages) {
 }
 
 async function sendChat(message) {
+    // Send the user message and current history to backend chat API.
     const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -710,6 +720,7 @@ async function sendChat(message) {
 }
 
 async function loadChats() {
+    // Load chat summaries for the left sidebar.
     const list = qs("chatList");
     if (!list) return;
 
@@ -755,6 +766,7 @@ async function loadChats() {
 }
 
 async function restoreChat(chatId) {
+    // Load one saved chat and repopulate the live conversation area.
     const response = await fetch(`/api/chats/${chatId}`);
     const data = await response.json();
     if (!response.ok) {
@@ -770,6 +782,8 @@ async function restoreChat(chatId) {
 }
 
 async function saveCurrentChat() {
+    // Save current in-memory conversation to SQLite.
+    // POST creates a new chat, PUT updates an existing one.
     const saveButton = qs("saveChatBtn");
 
     function setSaveButtonState(isSaving) {
@@ -813,6 +827,7 @@ async function saveCurrentChat() {
 }
 
 async function transcribeAudio(file) {
+    // Upload one recorded audio blob to the STT proxy and return plain text.
     const form = new FormData();
     const filename = file?.name || "voice-input.webm";
     form.append("audio", file, filename);

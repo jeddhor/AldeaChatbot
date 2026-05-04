@@ -57,6 +57,9 @@ The design language includes a default green/black metallic style plus multiple 
 - Whisper.cpp integration for speech input (optional)
 - Save chat sessions to SQLite and restore from a chat list
 - Save chats with automatic LLM-generated 3-4 word titles (fast low-token mode)
+- Built-in VRM companion viewer panel on chat screen
+- Dynamic companion model selection from local `vrm/` directory with upload support
+- Companion animation triggers from assistant tags (for example `[[Sleepy]]`) mapped to `vrma/` files
 - About screen describing architecture and intent
 
 ## Project Structure
@@ -94,17 +97,62 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-3. Run the app with Waitress:
+3. Run ALDEA (default is desktop app mode):
 
 ```powershell
 python app.py
 ```
 
-4. Open browser:
+4. If you prefer browser/server mode explicitly:
+
+```powershell
+python app.py --mode server
+```
+
+5. Open browser (server mode):
 
 - http://localhost:5050
 
-This starts ALDEA with Waitress (a production WSGI server that works on both Windows and Linux).
+Desktop app mode starts Waitress in-process and opens a built-in PyQt6 window.
+Server mode starts ALDEA with Waitress (a production WSGI server that works on both Windows and Linux).
+
+## Desktop App Mode (PyQt6)
+
+ALDEA now supports a built-in desktop window mode that still runs the same Waitress backend.
+
+Run desktop mode:
+
+```powershell
+python app.py --mode app
+```
+
+Behavior in app mode:
+
+- Starts Waitress in-process on localhost
+- Opens ALDEA in a PyQt6 WebEngine window automatically
+- Starts the app window maximized by default
+- If the requested port is busy, ALDEA picks the next available localhost port
+
+Useful options:
+
+```powershell
+python app.py --mode app --port 5050 --window-width 1280 --window-height 860
+```
+
+Start in normal (non-maximized) windowed mode:
+
+```powershell
+python app.py --mode app --no-maximize
+```
+
+Environment variable equivalents:
+
+- `ALDEA_MODE` (`server` or `app`)
+- `ALDEA_PORT`
+- `ALDEA_THREADS`
+- `ALDEA_WINDOW_WIDTH`
+- `ALDEA_WINDOW_HEIGHT`
+- `ALDEA_WINDOW_MAXIMIZED` (`1/true` for maximized, `0/false` for normal window)
 
 ## Logging with Waitress
 
@@ -143,8 +191,18 @@ Open the Configuration page from the top navigation.
 - User Avatar URL: Image URL for user message composer and message bubbles.
 - Assistant/User Avatar Upload (optional): Upload a local image file instead of using a URL.
 - Remove custom assistant/user avatar: clears uploaded custom avatar and falls back to URL/default.
+- Companion VRM Model: select active model from local `vrm/` folder.
+- Upload New VRM Model: upload `.vrm` files directly from Configuration.
 
 If both a URL and an uploaded file are provided, the uploaded file is used.
+
+### VRM Companion + Animations
+
+- Chat view includes a dedicated companion viewer panel on the right side.
+- The model starts in neutral pose and can be rotated horizontally only.
+- Zoom, vertical tilt, and panning are intentionally disabled for a stable portal view.
+- Animation files are discovered dynamically from `vrma/` by filename.
+- Assistant replies may include animation tags like `[[Sleepy]]`, which are stripped from visible text and used to trigger matching VRMA playback.
 
 ### LLM Provider
 
@@ -163,7 +221,7 @@ If both a URL and an uploaded file are provided, the uploaded file is used.
 - Enable Text to Speech
 - Server URL + Endpoint (default endpoint: /v1/audio/speech)
 - Model (optional and typically ignored by Coqui runtime)
-- Voice (speaker ID, reference file path, or reference directory path)
+- Voice (XTTS2): full built-in dropdown list of available XTTS2 voice names
 - Speed (float, default 1.0)
 - Response format (wav, mp3, opus, aac, flac, pcm)
 - Default State: Speak Replies Toggle On

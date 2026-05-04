@@ -1,16 +1,24 @@
 import json
 import logging
 import os
+import argparse
 import re
 import sqlite3
+import socket
+import sys
+import threading
+import time
 import uuid
+import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
 from time import perf_counter
 
+import bleach
+import markdown
 import requests
-from flask import Flask, g, jsonify, redirect, render_template, request, url_for
+from flask import Flask, g, jsonify, redirect, render_template, request, send_from_directory, url_for
 from werkzeug.utils import secure_filename
 
 try:
@@ -34,6 +42,24 @@ DB_PATH = INSTANCE_DIR / "chatbot.db"
 SETTINGS_PATH = INSTANCE_DIR / "settings.json"
 AVATAR_UPLOAD_DIR = BASE_DIR / "static" / "uploads" / "avatars"
 ALLOWED_AVATAR_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+VRM_DIR = BASE_DIR / "vrm"
+VRMA_DIR = BASE_DIR / "vrma"
+ALLOWED_VRM_EXTENSIONS = {"vrm"}
+DEFAULT_ASSISTANT_AVATAR_PATH = "/static/uploads/avatars/aldea.png"
+DEFAULT_COMPANION_VRM_FILENAME = "Aldea.vrm"
+SYSTEM_PROMPT_SUMMARY_ID = 1
+
+
+def _ensure_default_assistant_avatar_asset() -> None:
+    source = BASE_DIR / "aldea.png"
+    destination = AVATAR_UPLOAD_DIR / "aldea.png"
+
+    try:
+        if source.exists() and source.is_file():
+            # Move the user-provided root asset into managed static avatar storage.
+            source.replace(destination)
+    except Exception:
+        app.logger.exception("Failed moving default assistant avatar asset into static storage")
 
 THEME_OPTIONS = {
     "matrix-green",
@@ -48,12 +74,81 @@ THEME_OPTIONS = {
     "lemonade-pop",
 }
 
+XTTS2_VOICE_NAMES = [
+    "Claribel Dervla",
+    "Daisy Studious",
+    "Gracie Wise",
+    "Tammie Ema",
+    "Alison Dietlinde",
+    "Ana Florence",
+    "Annmarie Nele",
+    "Asya Anara",
+    "Brenda Stern",
+    "Gitta Nikolina",
+    "Henriette Usha",
+    "Sofia Hellen",
+    "Tammy Grit",
+    "Tanja Adelina",
+    "Vjollca Johnnie",
+    "Andrew Chipper",
+    "Badr Odhiambo",
+    "Dionisio Schuyler",
+    "Royston Min",
+    "Viktor Eka",
+    "Abrahan Mack",
+    "Adde Michal",
+    "Baldur Sanjin",
+    "Craig Gutsy",
+    "Damien Black",
+    "Gilberto Mathias",
+    "Ilkin Urbano",
+    "Kazuhiko Atallah",
+    "Ludvig Milivoj",
+    "Suad Qasim",
+    "Torcull Diarmuid",
+    "Viktor Menelaos",
+    "Zacharie Aimilios",
+    "Nova Hogarth",
+    "Maja Ruoho",
+    "Uta Obando",
+    "Lidiya Szekeres",
+    "Chandra MacFarland",
+    "Szofi Granger",
+    "Camilla Holmström",
+    "Lilya Stainthorpe",
+    "Zofija Kendrick",
+    "Narelle Moon",
+    "Barbora MacLean",
+    "Alexandra Hisakawa",
+    "Alma María",
+    "Rosemary Okafor",
+    "Ige Behringer",
+    "Filip Traverse",
+    "Damjan Chapman",
+    "Wulf Carlevaro",
+    "Aaron Dreschner",
+    "Kumar Dahl",
+    "Eugenio Mataracı",
+    "Ferran Simen",
+    "Xavier Hayasaka",
+    "Luis Moray",
+    "Marcos Rudaski",
+]
+
+COMPANION_DEFAULT_POSE_OPTIONS = {
+    "model_rest": "Model Rest (hands down / authored idle)",
+    "normalized_rest": "Humanoid Rest (standardized rest pose)",
+}
+
 # Default values are intentionally complete so the app can run immediately.
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "ui": {
         "theme_mode": "matrix-green",
-        "assistant_avatar": "https://api.dicebear.com/9.x/bottts/svg?seed=Sentinel",
+        "assistant_avatar": DEFAULT_ASSISTANT_AVATAR_PATH,
         "user_avatar": "https://api.dicebear.com/9.x/personas/svg?seed=Operator",
+        "companion_vrm_model": "",
+        "companion_default_pose": "model_rest",
+        "companion_flip_facing": True,
     },
     "llm": {
         "provider": "openai_compatible",
@@ -67,7 +162,12 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
             "Give accurate and thoughtful answers using concise structure when useful. "
             "Ask focused follow-up questions when requirements are ambiguous. "
             "Avoid over-familiar language and avoid being cold or abrupt. "
-            "When uncertain, say what is unknown and offer a sensible next step."
+            "When uncertain, say what is unknown and offer a sensible next step.\n\n"
+            "### ACTION EXPRESSION PROTOCOL\n"
+            "- You may use tags such as [[Angry]], [[Blush]], [[Clapping]] to simulate actions and emotional expression in your responses.\n"
+            "- The complete list of available tags is provided at runtime; only use tags from that list.\n"
+            "- You may not use any tags other than those in the list.\n"
+            "- Tags should be used sparingly, and when they make sense, not on every single response."
         ),
     },
     "tts": {
@@ -76,6 +176,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "endpoint": "/v1/audio/speech",
         "model": "coqui-tts",
         "voice": "",
+        "voice_options": "",
         "speed": 1.0,
         "response_format": "mp3",
         "auto_speak_default": False,
@@ -158,6 +259,9 @@ def init_storage() -> None:
     # This lets a first-time user run the app without manual setup steps.
     INSTANCE_DIR.mkdir(parents=True, exist_ok=True)
     AVATAR_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    VRM_DIR.mkdir(parents=True, exist_ok=True)
+    VRMA_DIR.mkdir(parents=True, exist_ok=True)
+    _ensure_default_assistant_avatar_asset()
 
     if not SETTINGS_PATH.exists():
         SETTINGS_PATH.write_text(json.dumps(DEFAULT_SETTINGS, indent=2), encoding="utf-8")
@@ -185,6 +289,179 @@ def init_storage() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS system_prompt_summary (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                prompt_hash TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+
+    # First-run bootstrap: create and persist a detailed intro summary if absent.
+    try:
+        ensure_system_prompt_summary(load_settings(), force=False)
+    except Exception:
+        app.logger.exception("Failed bootstrapping system prompt summary")
+
+
+def _now_utc_iso() -> str:
+    return datetime.utcnow().isoformat(timespec="seconds") + "Z"
+
+
+def _hash_text(value: str) -> str:
+    return hashlib.sha256((value or "").encode("utf-8")).hexdigest()
+
+
+def strip_action_expression_tags(text: str) -> str:
+    """Remove action-expression tokens like [[Angry]] from summary text."""
+    if not text:
+        return ""
+    without_tags = re.sub(r"\[\[[^\]]+\]\]", "", text)
+    # Collapse whitespace while preserving paragraph breaks.
+    without_tags = re.sub(r"[ \t]+", " ", without_tags)
+    without_tags = re.sub(r"\n{3,}", "\n\n", without_tags)
+    return without_tags.strip()
+
+
+def _fallback_system_prompt_summary(system_prompt: str) -> str:
+    cleaned = re.sub(r"\s+", " ", (system_prompt or "").strip())
+    excerpt = cleaned[:480] + ("..." if len(cleaned) > 480 else "")
+    return (
+        "Hello, I am ALDEA. I am here to support you with clear, practical guidance, and I try to balance calm precision "
+        "with a genuinely human tone. I focus on giving useful next steps, organizing complex topics into manageable pieces, "
+        "and being explicit about uncertainty when needed.\n\n"
+        "In this workspace I can also reflect expression tags for the companion model when they are available, and I adapt my "
+        "style to the boundaries set in my system instructions. I aim to stay grounded, avoid filler, and keep the conversation "
+        "moving in a way that feels thoughtful and collaborative.\n\n"
+        f"Current instruction profile excerpt: {excerpt}"
+    )
+
+
+def render_about_summary_html(raw_summary: str) -> str:
+    """Render rich text for About summary with conservative HTML sanitization."""
+    safe_raw = (raw_summary or "").strip()
+    rendered = markdown.markdown(
+        safe_raw,
+        extensions=["extra", "sane_lists", "nl2br", "fenced_code", "tables"],
+    )
+    allowed_tags = list(bleach.sanitizer.ALLOWED_TAGS) + [
+        "p",
+        "br",
+        "hr",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "pre",
+        "code",
+        "blockquote",
+        "ul",
+        "ol",
+        "li",
+        "table",
+        "thead",
+        "tbody",
+        "tr",
+        "th",
+        "td",
+        "em",
+        "strong",
+    ]
+    allowed_attributes = {
+        **bleach.sanitizer.ALLOWED_ATTRIBUTES,
+        "a": ["href", "title", "rel", "target"],
+    }
+    cleaned = bleach.clean(rendered, tags=allowed_tags, attributes=allowed_attributes, strip=True)
+    return bleach.linkify(cleaned)
+
+
+def _generate_system_prompt_summary_text(settings: Dict[str, Any]) -> str:
+    llm = settings.get("llm", {})
+    provider = llm.get("provider", "openai_compatible")
+    system_prompt = (llm.get("system_prompt") or "").strip()
+
+    if not system_prompt:
+        return _fallback_system_prompt_summary("")
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You write polished first-person introductions. Write as if you are the assistant introducing yourself directly "
+                "to the user in a warm, grounded, human voice. Do not mention being an AI model or describe prompt-engineering mechanics."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "Read the system prompt below and write a detailed introduction (2-4 short paragraphs) that sounds personal and natural. "
+                "Summarize capabilities, behavior style, and boundaries implied by the prompt.\n\n"
+                f"SYSTEM PROMPT:\n{system_prompt}"
+            ),
+        },
+    ]
+
+    try:
+        if provider == "ollama":
+            summary = call_ollama(settings, messages)
+        else:
+            summary = call_openai_compatible(settings, messages)
+        cleaned = strip_action_expression_tags((summary or "").strip())
+        return cleaned or _fallback_system_prompt_summary(system_prompt)
+    except Exception:
+        app.logger.exception("Failed generating system prompt summary; using fallback")
+        return strip_action_expression_tags(_fallback_system_prompt_summary(system_prompt))
+
+
+def ensure_system_prompt_summary(settings: Dict[str, Any], force: bool = False) -> str:
+    llm = settings.get("llm", {})
+    prompt_text = (llm.get("system_prompt") or "").strip()
+    prompt_hash = _hash_text(prompt_text)
+
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT prompt_hash, summary FROM system_prompt_summary WHERE id = ?",
+            (SYSTEM_PROMPT_SUMMARY_ID,),
+        ).fetchone()
+
+    if row and not force and row["prompt_hash"] == prompt_hash and (row["summary"] or "").strip():
+        stored_summary = str(row["summary"]).strip()
+        cleaned_stored_summary = strip_action_expression_tags(stored_summary)
+        if cleaned_stored_summary != stored_summary:
+            now = _now_utc_iso()
+            with get_db() as conn:
+                conn.execute(
+                    """
+                    UPDATE system_prompt_summary
+                    SET summary = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (cleaned_stored_summary, now, SYSTEM_PROMPT_SUMMARY_ID),
+                )
+        return cleaned_stored_summary
+
+    summary_text = strip_action_expression_tags(_generate_system_prompt_summary_text(settings))
+    now = _now_utc_iso()
+
+    with get_db() as conn:
+        conn.execute(
+            """
+            INSERT INTO system_prompt_summary(id, prompt_hash, summary, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                prompt_hash = excluded.prompt_hash,
+                summary = excluded.summary,
+                updated_at = excluded.updated_at
+            """,
+            (SYSTEM_PROMPT_SUMMARY_ID, prompt_hash, summary_text, now),
+        )
+
+    return summary_text
 
 
 def deep_merge(default: Dict[str, Any], loaded: Dict[str, Any]) -> Dict[str, Any]:
@@ -204,6 +481,31 @@ def migrate_legacy_settings(settings: Dict[str, Any]) -> bool:
     Returns True when any in-memory value changed and should be saved.
     """
     changed = False
+    llm = settings.get("llm", {})
+    legacy_default_prompt = (
+        "You are a general-purpose assistant who is clear, practical, and composed. "
+        "Give accurate and thoughtful answers using concise structure when useful. "
+        "Ask focused follow-up questions when requirements are ambiguous. "
+        "Avoid over-familiar language and avoid being cold or abrupt. "
+        "When uncertain, say what is unknown and offer a sensible next step."
+    )
+    legacy_action_protocol_prompt = (
+        "You are a general-purpose assistant who is clear, practical, and composed. "
+        "Give accurate and thoughtful answers using concise structure when useful. "
+        "Ask focused follow-up questions when requirements are ambiguous. "
+        "Avoid over-familiar language and avoid being cold or abrupt. "
+        "When uncertain, say what is unknown and offer a sensible next step.\n\n"
+        "### ACTION EXPRESSION PROTOCOL\n"
+        "- You may use tags such as [[Angry]], [[Blush]], [[Clapping]] to simulate actions and emotional expression in your responses.\n"
+        "- The complete list of available tags is: [[Angry]], [[Blush]], [[Clapping]], [[Goodbye]], [[Jump]], [[LookAround]], [[Relax]], [[Sad]], [[Sleepy]], [[Surprised]], [[Thinking]]\n"
+        "- You may not use any tags other than those in the list.\n"
+        "- Tags should be used sparingly, and when they make sense, not on every single response."
+    )
+    if (llm.get("system_prompt") or "").strip() in {legacy_default_prompt, legacy_action_protocol_prompt}:
+        llm["system_prompt"] = DEFAULT_SETTINGS["llm"]["system_prompt"]
+        settings["llm"] = llm
+        changed = True
+
     ui = settings.get("ui", {})
 
     legacy_theme = (ui.get("theme_mode") or "").strip().lower()
@@ -216,6 +518,28 @@ def migrate_legacy_settings(settings: Dict[str, Any]) -> bool:
         normalized_theme = "matrix-green"
     if ui.get("theme_mode") != normalized_theme:
         ui["theme_mode"] = normalized_theme
+        changed = True
+    if "companion_vrm_model" not in ui:
+        ui["companion_vrm_model"] = ""
+        changed = True
+    current_pose = str(ui.get("companion_default_pose", "model_rest")).strip()
+    if current_pose not in COMPANION_DEFAULT_POSE_OPTIONS:
+        ui["companion_default_pose"] = "model_rest"
+        changed = True
+    if "companion_flip_facing" not in ui:
+        ui["companion_flip_facing"] = True
+        changed = True
+    current_assistant_avatar = str(ui.get("assistant_avatar") or "").strip()
+    legacy_assistant_defaults = {
+        "",
+        "https://api.dicebear.com/9.x/bottts/svg?seed=Sentinel",
+    }
+    if current_assistant_avatar.startswith("/static/uploads/avatars/"):
+        avatar_file = BASE_DIR / current_assistant_avatar.lstrip("/")
+        if not avatar_file.exists():
+            current_assistant_avatar = ""
+    if current_assistant_avatar in legacy_assistant_defaults:
+        ui["assistant_avatar"] = DEFAULT_ASSISTANT_AVATAR_PATH
         changed = True
 
     tts = settings.get("tts", {})
@@ -242,6 +566,9 @@ def migrate_legacy_settings(settings: Dict[str, Any]) -> bool:
     # Ensure required OpenAI-compatible keys exist.
     if not tts.get("model"):
         tts["model"] = "coqui-tts"
+        changed = True
+    if "voice_options" not in tts:
+        tts["voice_options"] = ""
         changed = True
     if "speed" not in tts:
         tts["speed"] = 1.0
@@ -414,6 +741,78 @@ def _delete_local_avatar_if_managed(avatar_url: str) -> None:
         app.logger.warning("Failed to delete avatar file: %s", path)
 
 
+def list_vrm_model_filenames() -> List[str]:
+    """Return sorted `.vrm` filenames from the project vrm directory."""
+    if not VRM_DIR.exists():
+        return []
+    names = [
+        item.name
+        for item in VRM_DIR.iterdir()
+        if item.is_file() and item.suffix.lower().lstrip(".") in ALLOWED_VRM_EXTENSIONS
+    ]
+    return sorted(names, key=str.casefold)
+
+
+def get_default_companion_vrm_model(available_models: List[str]) -> str:
+    """Choose the default companion model, preferring Aldea when available."""
+    if not available_models:
+        return ""
+    return DEFAULT_COMPANION_VRM_FILENAME if DEFAULT_COMPANION_VRM_FILENAME in available_models else available_models[0]
+
+
+def list_vrma_action_names() -> List[str]:
+    """Return animation action names based on `.vrma` filenames."""
+    if not VRMA_DIR.exists():
+        return []
+    actions = [item.stem for item in VRMA_DIR.iterdir() if item.is_file() and item.suffix.lower() == ".vrma"]
+    return sorted(actions, key=str.casefold)
+
+
+def _save_vrm_upload(upload) -> str | None:
+    """Save uploaded VRM file and return stored filename.
+
+    Returns None when upload is missing or empty.
+    """
+    if not upload:
+        return None
+    filename = (upload.filename or "").strip()
+    if not filename:
+        return None
+
+    safe_name = secure_filename(filename)
+    if not safe_name or "." not in safe_name:
+        return None
+
+    ext = safe_name.rsplit(".", 1)[-1].lower()
+    if ext not in ALLOWED_VRM_EXTENSIONS:
+        raise ValueError("Unsupported model format. Upload a .vrm file.")
+
+    stored_name = f"{Path(safe_name).stem}_{uuid.uuid4().hex[:10]}.{ext}"
+    destination = VRM_DIR / stored_name
+    upload.save(destination)
+    return stored_name
+
+
+def _extract_companion_action(reply_text: str, action_names: List[str]) -> tuple[str, str | None]:
+    """Extract a trailing or inline [[Action]] tag and return cleaned text + action."""
+    text = str(reply_text or "")
+    matches = re.findall(r"\[\[\s*([^\]]+?)\s*\]\]", text)
+    if not matches:
+        return text.strip(), None
+
+    lookup = {name.casefold(): name for name in action_names}
+    selected: str | None = None
+    for raw in reversed(matches):
+        candidate = raw.strip()
+        normalized = lookup.get(candidate.casefold())
+        if normalized:
+            selected = normalized
+            break
+
+    cleaned = re.sub(r"\s*\[\[\s*[^\]]+?\s*\]\]\s*", " ", text).strip()
+    return (cleaned or text.strip()), selected
+
+
 # -----------------------------
 # LLM integration helpers
 # -----------------------------
@@ -572,7 +971,19 @@ def generate_assistant_reply(
     provider = llm.get("provider", "openai_compatible")
     set_runtime_tool_settings(settings.get("tools", {}))
 
-    messages: List[Dict[str, str]] = [{"role": "system", "content": llm["system_prompt"]}]
+    action_names = list_vrma_action_names()
+    action_instruction = ""
+    if action_names:
+        bracketed_actions = ", ".join(f"[[{name}]]" for name in action_names)
+        action_instruction = (
+            "\n\n### ACTION EXPRESSION PROTOCOL\n"
+            "- You may use tags such as [[Angry]], [[Blush]], [[Clapping]] to simulate actions and emotional expression in your responses.\n"
+            f"- Available tags right now are: {bracketed_actions}\n"
+            "- You may not use any tags other than those in the list.\n"
+            "- Tags should be used sparingly, and when they make sense, not on every single response."
+        )
+
+    messages: List[Dict[str, str]] = [{"role": "system", "content": f"{llm['system_prompt']}{action_instruction}"}]
     messages.extend(history)
     messages.append({"role": "user", "content": user_message})
     tool_events: List[Dict[str, Any]] = []
@@ -986,13 +1397,28 @@ def generate_chat_title(settings: Dict[str, Any], messages: List[Dict[str, str]]
 @app.route("/")
 def index():
     settings = load_settings()
-    return render_template("chat.html", settings=settings)
+    available_models = list_vrm_model_filenames()
+    available_actions = list_vrma_action_names()
+    selected_model = (settings.get("ui", {}).get("companion_vrm_model") or "").strip()
+    if selected_model not in available_models:
+        selected_model = get_default_companion_vrm_model(available_models)
+        settings["ui"]["companion_vrm_model"] = selected_model
+        save_settings(settings)
+
+    return render_template(
+        "chat.html",
+        settings=settings,
+        available_vrm_models=available_models,
+        available_vrma_actions=available_actions,
+        selected_vrm_model=selected_model,
+    )
 
 
 @app.route("/settings", methods=["GET", "POST"])
 def settings_page():
     if request.method == "POST":
         settings = load_settings()
+        previous_system_prompt = (settings.get("llm", {}).get("system_prompt") or "").strip()
 
         # UI settings
         requested_theme = (request.form.get("theme_mode", "matrix-green") or "").strip()
@@ -1029,6 +1455,25 @@ def settings_page():
             _delete_local_avatar_if_managed(previous_assistant_avatar)
         if settings["ui"]["user_avatar"] != previous_user_avatar:
             _delete_local_avatar_if_managed(previous_user_avatar)
+
+        # Companion VRM model settings
+        selected_companion_vrm = request.form.get("companion_vrm_model", "").strip()
+        uploaded_vrm_file = request.files.get("companion_vrm_file")
+        uploaded_vrm_name = _save_vrm_upload(uploaded_vrm_file)
+        if uploaded_vrm_name:
+            settings["ui"]["companion_vrm_model"] = uploaded_vrm_name
+        else:
+            available_models = list_vrm_model_filenames()
+            settings["ui"]["companion_vrm_model"] = (
+                selected_companion_vrm
+                if selected_companion_vrm in available_models
+                else get_default_companion_vrm_model(available_models)
+            )
+        selected_default_pose = request.form.get("companion_default_pose", "model_rest").strip()
+        settings["ui"]["companion_default_pose"] = (
+            selected_default_pose if selected_default_pose in COMPANION_DEFAULT_POSE_OPTIONS else "model_rest"
+        )
+        settings["ui"]["companion_flip_facing"] = request.form.get("companion_flip_facing") == "on"
 
         # LLM settings
         settings["llm"]["provider"] = request.form.get("provider", "openai_compatible")
@@ -1083,14 +1528,51 @@ def settings_page():
         settings["random_chats"]["idle_seconds"] = max(30, min(3600, idle_seconds))
 
         save_settings(settings)
+        current_system_prompt = (settings.get("llm", {}).get("system_prompt") or "").strip()
+        if current_system_prompt != previous_system_prompt:
+            ensure_system_prompt_summary(settings, force=True)
+        else:
+            ensure_system_prompt_summary(settings, force=False)
         return redirect(url_for("settings_page"))
 
-    return render_template("settings.html", settings=load_settings())
+    settings = load_settings()
+    available_models = list_vrm_model_filenames()
+    selected_model = (settings.get("ui", {}).get("companion_vrm_model") or "").strip()
+    if selected_model not in available_models:
+        selected_model = get_default_companion_vrm_model(available_models)
+        settings["ui"]["companion_vrm_model"] = selected_model
+        save_settings(settings)
+
+    return render_template(
+        "settings.html",
+        settings=settings,
+        xtts2_voice_names=XTTS2_VOICE_NAMES,
+        available_vrm_models=available_models,
+        companion_default_pose_options=COMPANION_DEFAULT_POSE_OPTIONS,
+    )
 
 
 @app.route("/about")
 def about_page():
-    return render_template("about.html", settings=load_settings())
+    settings = load_settings()
+    summary = ensure_system_prompt_summary(settings)
+    return render_template(
+        "about.html",
+        settings=settings,
+        about_intro_summary=summary,
+        about_intro_html=render_about_summary_html(summary),
+        about_logo_url=DEFAULT_ASSISTANT_AVATAR_PATH,
+    )
+
+
+@app.route("/assets/vrm/<path:filename>")
+def serve_vrm_model(filename: str):
+    return send_from_directory(VRM_DIR, filename)
+
+
+@app.route("/assets/vrma/<path:filename>")
+def serve_vrma_animation(filename: str):
+    return send_from_directory(VRMA_DIR, filename)
 
 
 @app.before_request
@@ -1143,10 +1625,15 @@ def api_chat():
         # Generate one assistant reply using current runtime settings.
         # include_debug=True also returns tool usage details for UI indicators.
         settings = load_settings()
+        available_actions = list_vrma_action_names()
         response_payload = generate_assistant_reply(settings, user_message, safe_history, include_debug=True)
         if isinstance(response_payload, dict) and "reply" in response_payload:
+            cleaned_reply, action = _extract_companion_action(response_payload.get("reply", ""), available_actions)
+            response_payload["reply"] = cleaned_reply
+            response_payload["action"] = action
             return jsonify(response_payload)
-        return jsonify({"reply": str(response_payload), "tool_debug": {"used": False, "events": []}})
+        cleaned_reply, action = _extract_companion_action(str(response_payload), available_actions)
+        return jsonify({"reply": cleaned_reply, "action": action, "tool_debug": {"used": False, "events": []}})
     except requests.RequestException as exc:
         return jsonify({"error": f"Upstream request failed: {exc}"}), 502
     except Exception as exc:
@@ -1172,7 +1659,8 @@ def api_random_chat():
 
     try:
         reply = generate_idle_ponder_reply(settings, safe_history)
-        return jsonify({"reply": reply})
+        cleaned_reply, action = _extract_companion_action(reply, list_vrma_action_names())
+        return jsonify({"reply": cleaned_reply, "action": action})
     except requests.RequestException as exc:
         return jsonify({"error": f"Upstream request failed: {exc}"}), 502
     except Exception as exc:
@@ -1473,6 +1961,119 @@ if __name__ == "__main__":
             "Waitress is required to run this app. Install dependencies with: pip install -r requirements.txt"
         ) from exc
 
-    serve(app, host="0.0.0.0", port=5050, threads=8)
+    def _is_port_in_use(host: str, port: int) -> bool:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.25)
+            return sock.connect_ex((host, port)) == 0
+
+    def _find_open_port(host: str, start_port: int, max_tries: int = 64) -> int:
+        port = int(start_port)
+        for _ in range(max_tries):
+            if not _is_port_in_use(host, port):
+                return port
+            port += 1
+        raise RuntimeError(f"Unable to find open port near {start_port} on {host}.")
+
+    def _wait_for_server_ready(url: str, timeout_seconds: float = 18.0) -> bool:
+        deadline = time.time() + timeout_seconds
+        while time.time() < deadline:
+            try:
+                response = requests.get(url, timeout=1.2)
+                if response.status_code < 500:
+                    return True
+            except requests.RequestException:
+                pass
+            time.sleep(0.2)
+        return False
+
+    def _launch_qt_webview(url: str, window_width: int, window_height: int, maximize_window: bool) -> int:
+        try:
+            import importlib
+
+            qt_core = importlib.import_module("PyQt6.QtCore")
+            qt_widgets = importlib.import_module("PyQt6.QtWidgets")
+            qt_webengine = importlib.import_module("PyQt6.QtWebEngineWidgets")
+
+            QUrl = qt_core.QUrl
+            QApplication = qt_widgets.QApplication
+            QMainWindow = qt_widgets.QMainWindow
+            QWebEngineView = qt_webengine.QWebEngineView
+        except Exception as exc:
+            raise SystemExit(
+                "PyQt6 app mode requires PyQt6 and PyQt6-WebEngine. "
+                "Install dependencies with: pip install -r requirements.txt"
+            ) from exc
+
+        qt_app = QApplication(sys.argv)
+        window = QMainWindow()
+        window.setWindowTitle("ALDEA")
+        window.resize(max(980, int(window_width)), max(680, int(window_height)))
+
+        browser = QWebEngineView(window)
+        browser.setUrl(QUrl(url))
+        window.setCentralWidget(browser)
+        if maximize_window:
+            window.showMaximized()
+        else:
+            window.show()
+        return qt_app.exec()
+
+    maximize_default = os.getenv("ALDEA_WINDOW_MAXIMIZED", "1").strip().lower() not in {"0", "false", "no", "off"}
+
+    parser = argparse.ArgumentParser(description="Run ALDEA as server mode or desktop app mode.")
+    parser.add_argument(
+        "--mode",
+        choices=["server", "app"],
+        default=os.getenv("ALDEA_MODE", "app").strip().lower() or "app",
+        help="Run as plain web server or launch built-in desktop app window.",
+    )
+    parser.add_argument("--host", default=os.getenv("ALDEA_HOST", "0.0.0.0"), help="Waitress host binding.")
+    parser.add_argument("--port", type=int, default=int(os.getenv("ALDEA_PORT", "5050")), help="Waitress port.")
+    parser.add_argument("--threads", type=int, default=int(os.getenv("ALDEA_THREADS", "8")), help="Waitress worker threads.")
+    parser.add_argument(
+        "--window-width",
+        type=int,
+        default=int(os.getenv("ALDEA_WINDOW_WIDTH", "1240")),
+        help="Desktop app window width when mode=app.",
+    )
+    parser.add_argument(
+        "--window-height",
+        type=int,
+        default=int(os.getenv("ALDEA_WINDOW_HEIGHT", "840")),
+        help="Desktop app window height when mode=app.",
+    )
+    parser.add_argument(
+        "--no-maximize",
+        action="store_true",
+        default=False,
+        help="Start desktop app in normal windowed mode instead of maximized.",
+    )
+    args = parser.parse_args()
+
+    if args.mode == "server":
+        serve(app, host=args.host, port=args.port, threads=max(2, int(args.threads)))
+    else:
+        # Desktop mode uses localhost-only binding and a dedicated Qt web view window.
+        app_host = "127.0.0.1"
+        requested_port = int(args.port)
+        app_port = _find_open_port(app_host, requested_port)
+        if app_port != requested_port:
+            app.logger.warning("Requested app-mode port %s in use; switched to %s", requested_port, app_port)
+
+        server_thread = threading.Thread(
+            target=serve,
+            kwargs={"app": app, "host": app_host, "port": app_port, "threads": max(2, int(args.threads))},
+            daemon=True,
+            name="aldea-waitress",
+        )
+        server_thread.start()
+
+        app_url = f"http://{app_host}:{app_port}"
+        if not _wait_for_server_ready(app_url):
+            raise SystemExit(f"ALDEA app mode failed to start backend server at {app_url}")
+
+        maximize_window = maximize_default and not args.no_maximize
+        exit_code = _launch_qt_webview(app_url, args.window_width, args.window_height, maximize_window)
+        raise SystemExit(exit_code)
 else:
     init_storage()

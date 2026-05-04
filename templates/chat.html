@@ -54,5 +54,35 @@
             </div>
         </form>
     </section>
+
+    <aside class="companion-panel glass-panel">
+        <header class="companion-head">
+            <h2>Companion</h2>
+            <div class="companion-head-controls">
+                <span class="badge">VRM</span>
+                <button
+                    type="button"
+                    id="companionFlipBtn"
+                    class="companion-flip-btn"
+                    aria-label="Flip companion facing direction"
+                    title="Flip companion facing direction"
+                >&#x21BB;</button>
+            </div>
+        </header>
+        <div id="vrmViewerPortal" class="vrm-viewer-portal" aria-label="3D companion viewer"></div>
+    </aside>
 </section>
+
+<div
+    id="vrmConfig"
+    data-selected-model="{{ selected_vrm_model }}"
+    data-default-pose="{{ settings.ui.companion_default_pose }}"
+    data-flip-facing="{{ 'true' if settings.ui.companion_flip_facing else 'false' }}"
+    data-action-names='{{ available_vrma_actions | tojson }}'
+    hidden
+></div>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/vrm-viewer.js') }}"></script>
 {% endblock %}

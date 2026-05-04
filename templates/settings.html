@@ -8,7 +8,7 @@
         <p>Tune model behavior, voice integrations, and visual identity.</p>
     </header>
 
-    <form method="post" enctype="multipart/form-data" class="settings-form">
+    <form method="post" enctype="multipart/form-data" class="settings-form" id="settingsForm">
         <details class="settings-card settings-collapsible">
             <summary>
                 <span class="settings-summary-title">Visual + Avatars</span>
@@ -114,7 +114,30 @@
                     <input name="remove_user_avatar" type="checkbox">
                     Remove custom user avatar and use URL/default
                 </label>
+                <label>Companion VRM Model
+                    <select name="companion_vrm_model">
+                        {% for model_name in available_vrm_models %}
+                        <option value="{{ model_name }}" {% if settings.ui.companion_vrm_model == model_name %}selected{% endif %}>{{ model_name }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>Companion Default Pose
+                    <select name="companion_default_pose">
+                        {% for pose_key, pose_label in companion_default_pose_options.items() %}
+                        <option value="{{ pose_key }}" {% if settings.ui.companion_default_pose == pose_key %}selected{% endif %}>{{ pose_label }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label class="checkbox-row">
+                    <input name="companion_flip_facing" type="checkbox" {% if settings.ui.companion_flip_facing %}checked{% endif %}>
+                    Rotate companion 180 degrees on load (for models that face away by default)
+                </label>
+                <label>Upload New VRM Model (.vrm)
+                    <input name="companion_vrm_file" type="file" accept=".vrm,model/vrm,application/octet-stream">
+                </label>
                 <p class="field-help">You can provide a URL or upload an image file. If both are provided, the uploaded file is used.</p>
+                <p class="field-help">Companion model options are loaded dynamically from the project vrm folder.</p>
+                <p class="field-help">Model Rest uses the avatar's authored idle/rest pose (typically hands down). Humanoid Rest uses the standardized VRM humanoid rest pose.</p>
             </div>
         </details>
 
@@ -174,9 +197,15 @@
             <label>Model (optional, ignored by Coqui runtime)
                 <input name="tts_model" type="text" value="{{ settings.tts.model }}" placeholder="coqui-tts">
             </label>
-            <label>Voice
-                <input name="tts_voice" type="text" value="{{ settings.tts.voice or settings.tts.speaker }}" placeholder="Speaker ID or reference path">
+            <label>Voice (XTTS2)
+                <select name="tts_voice">
+                    <option value="" {% if not settings.tts.voice %}selected{% endif %}>Default voice</option>
+                    {% for voice_name in xtts2_voice_names %}
+                    <option value="{{ voice_name }}" {% if settings.tts.voice == voice_name %}selected{% endif %}>{{ voice_name }}</option>
+                    {% endfor %}
+                </select>
             </label>
+            <p class="field-help">Choose from the full XTTS2 voice list.</p>
             <label>Speed
                 <input name="tts_speed" type="number" min="0.25" max="4" step="0.05" value="{{ settings.tts.speed }}">
             </label>
@@ -293,6 +322,13 @@
         <div class="settings-actions">
             <button type="submit" class="btn btn-green">Save Configuration</button>
         </div>
+
+        <div id="settingsSavingOverlay" class="settings-saving-overlay" hidden>
+            <div class="settings-saving-panel" role="status" aria-live="polite" aria-atomic="true">
+                <span class="settings-saving-spinner" aria-hidden="true"></span>
+                <span>Saving configuration and refreshing introduction summary...</span>
+            </div>
+        </div>
     </form>
 </section>
 {% endblock %}
@@ -300,9 +336,12 @@
 {% block scripts %}
 <script>
     document.addEventListener("DOMContentLoaded", () => {
+        document.body.classList.add("settings-page");
+        const settingsForm = document.getElementById("settingsForm");
+        const savingOverlay = document.getElementById("settingsSavingOverlay");
         const themeSelect = document.querySelector('select[name="theme_mode"]');
         const swatches = document.querySelectorAll(".theme-swatch");
-        if (!themeSelect || !swatches.length) return;
+        const canSyncThemeSwatches = Boolean(themeSelect) && swatches.length > 0;
 
         const updateSelectedSwatch = () => {
             const selected = themeSelect.value;
@@ -311,15 +350,29 @@
             });
         };
 
-        swatches.forEach((swatch) => {
-            swatch.addEventListener("click", () => {
-                themeSelect.value = swatch.dataset.themeValue;
-                updateSelectedSwatch();
+        if (canSyncThemeSwatches) {
+            swatches.forEach((swatch) => {
+                swatch.addEventListener("click", () => {
+                    themeSelect.value = swatch.dataset.themeValue;
+                    updateSelectedSwatch();
+                });
             });
-        });
 
-        themeSelect.addEventListener("change", updateSelectedSwatch);
-        updateSelectedSwatch();
+            themeSelect.addEventListener("change", updateSelectedSwatch);
+            updateSelectedSwatch();
+        }
+
+        if (settingsForm && savingOverlay) {
+            document.body.appendChild(savingOverlay);
+            settingsForm.addEventListener("submit", () => {
+                savingOverlay.hidden = false;
+                const submitButtons = settingsForm.querySelectorAll('button[type="submit"]');
+                submitButtons.forEach((btn) => {
+                    btn.disabled = true;
+                    btn.setAttribute("aria-disabled", "true");
+                });
+            });
+        }
     });
 </script>
 {% endblock %}

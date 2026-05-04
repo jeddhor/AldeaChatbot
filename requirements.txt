@@ -3,3 +3,7 @@ requests==2.32.3
 feedparser==6.0.11
 pygame==2.6.1
 waitress==3.0.0
+Markdown==3.7
+bleach==6.1.0
+PyQt6==6.7.1
+PyQt6-WebEngine==6.7.0

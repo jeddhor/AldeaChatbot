@@ -961,6 +961,10 @@ function setupThemeToggle() {
     applyTheme(current);
 }
 
+async function initSettingsPage() {
+    // Settings page currently does not require runtime JS initialization.
+}
+
 async function initChatPage() {
     if (!qs("chatForm")) return;
 
@@ -1021,6 +1025,16 @@ async function initChatPage() {
     let wakeWordRealtimeRecognition = null;
     let wakeWordRealtimeActive = false;
     let wakeWordRealtimeRestartTimer = null;
+
+    function triggerCompanionAction(actionName) {
+        const action = String(actionName || "").trim();
+        if (!action) return;
+        window.dispatchEvent(
+            new CustomEvent("vrm-companion-action", {
+                detail: { action },
+            })
+        );
+    }
 
     function clearWakeWordDetectedTimer() {
         if (wakeWordDetectedTimer) {
@@ -1301,6 +1315,7 @@ async function initChatPage() {
             }
 
             const reply = String(data?.reply || "").trim();
+            const action = String(data?.action || "").trim();
             if (!reply) {
                 return;
             }
@@ -1313,6 +1328,7 @@ async function initChatPage() {
             if (speakRepliesEnabled) {
                 await triggerSpeakLastReply(false);
             }
+            triggerCompanionAction(action);
         } catch (error) {
             console.warn("Random chat generation failed", error);
         } finally {
@@ -1700,6 +1716,7 @@ async function initChatPage() {
         try {
             const chatResult = await sendChat(message);
             const reply = String(chatResult?.reply || "");
+            const action = String(chatResult?.action || "").trim();
             const toolDebug = chatResult?.tool_debug || {};
             const toolEvents = Array.isArray(toolDebug?.events) ? toolDebug.events : [];
             const usedTools = [...new Set(toolEvents.map((event) => event?.tool).filter(Boolean))];
@@ -1720,6 +1737,7 @@ async function initChatPage() {
             if (speakRepliesEnabled) {
                 await triggerSpeakLastReply(false);
             }
+            triggerCompanionAction(action);
         } catch (error) {
             const errMsg = `Error: ${error.message}`;
             const errorCreatedAt = new Date().toISOString();
@@ -1803,6 +1821,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     setupThemeToggle();
     try {
+        await initSettingsPage();
         await initChatPage();
     } catch (error) {
         console.error("Initialization error", error);
